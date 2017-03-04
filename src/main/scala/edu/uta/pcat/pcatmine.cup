@@ -1,0 +1,259 @@
+/********************************************************************************
+*
+* File: pcat.cup
+* The PCAT parser
+*
+********************************************************************************/
+
+package edu.uta.pcat;
+
+import scala.collection.immutable.*;
+import scala.Tuple2;
+import java_cup.runtime.*;
+
+
+parser code {:
+
+    static int[] tokens = {
+      sym.error, sym.ID, sym.STRING_LITERAL, sym.INTEGER_LITERAL, sym.REAL_LITERAL,
+      sym.AND, sym.ARRAY, sym.BEGIN, sym.BY, sym.DIV, sym.DO, sym.ELSE, sym.ELSIF, sym.END,
+      sym.EXIT, sym.FOR, sym.IF, sym.IS, sym.LOOP, sym.MOD, sym.NOT, sym.OF, sym.OR,
+      sym.PROCEDURE, sym.PROGRAM, sym.READ, sym.RECORD, sym.RETURN, sym.THEN, sym.TO,
+      sym.TYPE, sym.VAR, sym.WHILE, sym.WRITE, sym.ASGN, sym.PLUS, sym.MINUS, sym.TIMES, sym.SLASH,
+      sym.LT, sym.LEQ, sym.GT, sym.GEQ, sym.EQ, sym.NEQ, sym.COLON, sym.SEMI, sym.COMMA, sym.DOT,
+      sym.LPAREN, sym.RPAREN, sym.LSQBRA, sym.RSQBRA, sym.LCUBRA, sym.RCUBRA
+    };
+
+    static String[] token_names = {
+      "error", "ID", "STRING_LITERAL", "INTEGER_LITERAL", "REAL_LITERAL",
+      "AND", "ARRAY", "BEGIN", "BY", "DIV", "DO", "ELSE", "ELSIF", "END",
+      "EXIT", "FOR", "IF", "IS", "LOOP", "MOD", "NOT", "OF", "OR",
+      "PROCEDURE", "PROGRAM", "READ", "RECORD", "RETURN", "THEN", "TO",
+      "TYPE", "VAR", "WHILE", "WRITE", "ASGN :=", "PLUS +", "MINUS -", "TIMES *", "SLASH /",
+      "LT <", "LEQ <=", "GT >", "GEQ >=", "EQ =", "NEQ <>", "COLON :", "SEMI ;", "COMMA ,", "DOT .",
+      "LPAREN (", "RPAREN )", "LSQBRA [", "RSQBRA ]", "LCUBRA "+'{', "RCUBRA "+'}'
+    };
+
+    public static String print ( Symbol s ) {
+        for ( int i = 0; i < tokens.length; i++ ) {
+            if (tokens[i] == s.sym) {
+                String res = token_names[i] + " ";
+                if (s.value == null)
+                    return res;
+                else if (s.value instanceof Integer)
+                    return res + ((Integer) s.value).intValue();
+                else if (s.value instanceof Float)
+                    return res + ((Float) s.value).floatValue();
+                else if (s.value instanceof String)
+                    return res + "\"" + (String) s.value + "\"";
+            }
+        };
+        return "?";
+    }
+
+    public void syntax_error ( Symbol token ) {
+        System.err.println("*** Syntax Error: " + print(token) + " (line: " + token.left
+                           + ", column: " + token.right + ")");
+        System.exit(1);
+    }
+
+    /** nil is the empty list */
+    final static List nil = Nil$.MODULE$;
+
+    /** Append list2 at the end of list1 (ie, return a new list containing
+        the elements from list1 followed by the elements from list2) */
+    static<T> List<T> append ( List<T> list1, List<T> list2 ) {
+        return list1.$colon$colon$colon(list2);
+    }
+
+    /** append the element elem at the end of the list
+       (ie, return a new list containing the list followed by the elem) */
+    static<T> List<T> append ( List<T> list, T elem ) {
+        return nil.$colon$colon(elem).$colon$colon$colon(list);
+    }
+
+    /** Insert the element elem at the beginning of the list
+        (ie, return a new list containing the elem followed by the list) */
+    static<T> List<T> add ( T elem, List<T> list ) {
+        return list.$colon$colon(elem);
+    }
+
+:};
+
+/* Terminals (tokens returned by the scanner). */
+terminal String  ID, STRING_LITERAL;
+terminal Integer INTEGER_LITERAL;
+terminal Float   REAL_LITERAL;
+terminal         AND, ARRAY, BEGIN, BY, DIV, DO, ELSE, ELSIF, END, EXIT, FOR, IF, IS, LOOP, MOD,
+                 NOT, OF, OR, PROCEDURE, PROGRAM, READ, RECORD, RETURN, THEN, TO, TYPE, VAR, WHILE,
+                 WRITE, ASGN, PLUS, MINUS, TIMES, SLASH, LT, LEQ, GT, GEQ, EQ, NEQ, COLON, SEMI,
+                 COMMA, DOT, LPAREN, RPAREN, LSQBRA, RSQBRA, LCUBRA, RCUBRA, UMINUS;
+
+non terminal             program;
+non terminal Body        body;
+non terminal Expr        expression;
+non terminal Stmt        statement;
+non terminal List<Stmt>  statement_lst;
+non terminal var_decl_S,type_decl_S,procedure_decl_S,var_decl,var_decl_id_S;
+non terminal var_decl_type_O,type_decl,procedure_decl,procedure_decl_type_O,typename,type,component_S,component,formal_params,fp_section_S,fp_section;
+non terminal fp_section_id_S,statement_lvalue_S,statement_ELSIF_S,statement_else_O,statement_by_O,write_params,write_params_expr_S,write_expr,expression_O;
+non terminal lvalue,actual_params,actual_params_expr_S,record_inits,record_inits_pair_S,number,identifier,string;
+non terminal declaration_list,declaration_S,declaration,exp_of;
+non terminal array_inits,array_inits_array_init_S,array_init;
+
+start with program;
+
+
+program         ::=     PROGRAM IS body:b SEMI            
+                ;
+body            ::=     declaration_list BEGIN statement_lst:sl END        
+                ;
+declaration_list::=     declaration_list declaration
+						|{}
+				;
+
+declaration     ::=     VAR var_decl_S  
+                       |TYPE type_decl_S 
+					   |AND type_decl_S
+                       |PROCEDURE procedure_decl_S 
+;
+var_decl_S::=           var_decl_S var_decl {: System.out.println("decl 2"); :}
+						| {}
+;
+var_decl::=             identifier var_decl_id_S var_decl_type_O ASGN expression SEMI 
+;
+type_decl_S::=          type_decl_S type_decl					
+						|{}
+;
+procedure_decl_S::=     procedure_decl_S procedure_decl
+						| {}
+;
+
+
+var_decl_id_S::=        var_decl_id_S COMMA identifier 
+						| {: System.out.println("var_decl_id_S null "); :}  
+;
+var_decl_type_O::=      COLON typename 
+						| {: System.out.println("var_decl_type_O null "); :} 
+;
+
+type_decl::=            identifier IS type SEMI {: System.out.println("IS type "); :} 
+;
+
+procedure_decl::=       identifier formal_params procedure_decl_type_O IS body SEMI 
+;
+procedure_decl_type_O::= COLON typename  
+						|{}
+;
+
+typename::=             identifier  
+;
+type::=                 ARRAY OF typename 
+                     |RECORD component component_S END 
+                     |typename 
+;
+component_S::=          component_S component 
+						|{}
+;
+component::=            identifier COLON typename SEMI 
+;
+formal_params::=        LPAREN fp_section fp_section_S RPAREN   
+                     |LPAREN RPAREN 
+;
+fp_section_S::=         fp_section_S SEMI fp_section 
+						|{}
+;
+
+
+fp_section::=           identifier fp_section_id_S COLON typename 
+;
+fp_section_id_S::=      fp_section_id_S COMMA identifier 
+						|{}
+;
+				
+statement_lst   ::= statement_lst:sl statement:s 
+				|{}
+                ;
+
+statement::=         lvalue ASGN expression SEMI  
+                     |identifier actual_params SEMI  
+                     |READ LPAREN lvalue statement_lvalue_S RPAREN SEMI 
+                     |WRITE write_params SEMI 
+                     |IF expression THEN statement_lst statement_ELSIF_S statement_else_O END SEMI 
+                     |WHILE expression DO statement_lst END SEMI    {: System.out.println("while stmt"); :} 
+                     |LOOP statement_lst END SEMI  
+                     |FOR identifier ASGN expression TO expression statement_by_O DO statement_lst END SEMI 
+                     |EXIT SEMI       
+                     |RETURN expression_O SEMI     
+;
+statement_lvalue_S::=   statement_lvalue_S COMMA lvalue 
+							|{}
+;
+statement_ELSIF_S::=    statement_ELSIF_S ELSIF expression THEN statement_lst 
+						|{}
+;
+statement_else_O::=     ELSE statement_lst 
+						|{}
+;
+statement_by_O::=       BY expression 
+							|{}
+;
+write_params::=         LPAREN write_expr write_params_expr_S RPAREN 
+					
+                     |LPAREN RPAREN 
+;
+write_params_expr_S::=  write_params_expr_S COMMA write_expr 
+							|{}
+;
+write_expr::=           string 
+                     |expression
+;
+expression_O::=         expression 
+						| {}
+;
+
+expression	::=         number    {: System.out.println("1"); :}                   
+                        |lvalue    {: System.out.println("2"); :}                       
+                        |LPAREN expression RPAREN  {: System.out.println("3"); :}    
+				  	    |PLUS expression        {: System.out.println("4"); :}
+                        |NOT expression{: System.out.println("5"); :} 
+						|identifier PLUS identifier	{: System.out.println("i plus i"); :} 
+						|identifier PLUS number{: System.out.println("i plus n"); :} 
+						|number PLUS number{: System.out.println("n plus n"); :} 
+						|identifier MINUS identifier	{: System.out.println("i minus i"); :} 
+						|identifier MINUS number{: System.out.println("i minus n"); :} 
+						|number MINUS number {: System.out.println("n minus n"); :} 
+						|identifier actual_params  {: System.out.println("6"); :}    
+                        |identifier record_inits{: System.out.println("7"); :}    
+						|identifier array_inits {: System.out.println("8"); :}    
+			;
+lvalue			::= 	identifier  
+						|lvalue LSQBRA expression RSQBRA 
+						|lvalue DOT identifier   
+				;
+actual_params	::=     LPAREN expression actual_params_expr_S RPAREN 
+						|LPAREN RPAREN  
+				;
+actual_params_expr_S::= actual_params_expr_S COMMA expression  
+						| {}
+;
+record_inits::=         LCUBRA identifier ASGN expression record_inits_pair_S RCUBRA
+;
+record_inits_pair_S::=  record_inits_pair_S SEMI identifier ASGN expression
+						|{}
+;
+array_inits::=           LT array_init array_inits_array_init_S GT 
+;
+array_inits_array_init_S::=  array_inits_array_init_S COMMA array_init 
+                     | {}
+;
+array_init::=          expression 
+                    |expression OF expression
+;
+number::=           INTEGER_LITERAL  
+                    |REAL_LITERAL    
+;
+identifier        ::=          ID 
+;
+string::=              STRING_LITERAL 
+;

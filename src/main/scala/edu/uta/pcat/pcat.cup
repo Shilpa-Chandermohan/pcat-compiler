@@ -1,0 +1,274 @@
+/********************************************************************************
+*
+* File: pcat.cup
+* The PCAT parser
+*
+********************************************************************************/
+
+package edu.uta.pcat;
+
+import scala.collection.immutable.*;
+import scala.Tuple2;
+import java_cup.runtime.*;
+
+
+parser code {:
+
+    static int[] tokens = {
+      sym.error, sym.ID, sym.STRING_LITERAL, sym.INTEGER_LITERAL, sym.REAL_LITERAL,
+      sym.AND, sym.ARRAY, sym.BEGIN, sym.BY, sym.DIV, sym.DO, sym.ELSE, sym.ELSIF, sym.END,
+      sym.EXIT, sym.FOR, sym.IF, sym.IS, sym.LOOP, sym.MOD, sym.NOT, sym.OF, sym.OR,
+      sym.PROCEDURE, sym.PROGRAM, sym.READ, sym.RECORD, sym.RETURN, sym.THEN, sym.TO,
+      sym.TYPE, sym.VAR, sym.WHILE, sym.WRITE, sym.ASGN, sym.PLUS, sym.MINUS, sym.TIMES, sym.SLASH,
+      sym.LT, sym.LEQ, sym.GT, sym.GEQ, sym.EQ, sym.NEQ, sym.COLON, sym.SEMI, sym.COMMA, sym.DOT,
+      sym.LPAREN, sym.RPAREN, sym.LSQBRA, sym.RSQBRA, sym.LCUBRA, sym.RCUBRA
+    };
+
+    static String[] token_names = {
+      "error", "ID", "STRING_LITERAL", "INTEGER_LITERAL", "REAL_LITERAL",
+      "AND", "ARRAY", "BEGIN", "BY", "DIV", "DO", "ELSE", "ELSIF", "END",
+      "EXIT", "FOR", "IF", "IS", "LOOP", "MOD", "NOT", "OF", "OR",
+      "PROCEDURE", "PROGRAM", "READ", "RECORD", "RETURN", "THEN", "TO",
+      "TYPE", "VAR", "WHILE", "WRITE", "ASGN :=", "PLUS +", "MINUS -", "TIMES *", "SLASH /",
+      "LT <", "LEQ <=", "GT >", "GEQ >=", "EQ =", "NEQ <>", "COLON :", "SEMI ;", "COMMA ,", "DOT .",
+      "LPAREN (", "RPAREN )", "LSQBRA [", "RSQBRA ]", "LCUBRA "+'{', "RCUBRA "+'}'
+    };
+
+    public static String print ( Symbol s ) {
+        for ( int i = 0; i < tokens.length; i++ ) {
+            if (tokens[i] == s.sym) {
+                String res = token_names[i] + " ";
+                if (s.value == null)
+                    return res;
+                else if (s.value instanceof Integer)
+                    return res + ((Integer) s.value).intValue();
+                else if (s.value instanceof Float)
+                    return res + ((Float) s.value).floatValue();
+                else if (s.value instanceof String)
+                    return res + "\"" + (String) s.value + "\"";
+            }
+        };
+        return "?";
+    }
+
+    public void syntax_error ( Symbol token ) {
+        System.err.println("*** Syntax Error: " + print(token) + " (line: " + token.left
+                           + ", column: " + token.right + ")");
+        System.exit(1);
+    }
+
+    /** nil is the empty list */
+    final static List nil = Nil$.MODULE$;
+
+    /** Append list2 at the end of list1 (ie, return a new list containing
+        the elements from list1 followed by the elements from list2) */
+    static<T> List<T> append ( List<T> list1, List<T> list2 ) {
+        return list1.$colon$colon$colon(list2);
+    }
+
+    /** append the element elem at the end of the list
+       (ie, return a new list containing the list followed by the elem) */
+    static<T> List<T> append ( List<T> list, T elem ) {
+        return nil.$colon$colon(elem).$colon$colon$colon(list);
+    }
+
+    /** Insert the element elem at the beginning of the list
+        (ie, return a new list containing the elem followed by the list) */
+    static<T> List<T> add ( T elem, List<T> list ) {
+        return list.$colon$colon(elem);
+    }
+
+:};
+
+/* Terminals (tokens returned by the scanner). */
+
+
+terminal String  ID, STRING_LITERAL;
+
+terminal Integer INTEGER_LITERAL;
+
+terminal Float   REAL_LITERAL;
+
+terminal 		AND, ARRAY, BEGIN, BY, DIV, DO, ELSE, ELSIF, END, EXIT, FOR, IF, IS, LOOP, MOD,
+                 NOT, OF, OR, PROCEDURE, PROGRAM, READ, RECORD, RETURN, THEN, TO, TYPE, VAR, WHILE,
+                 WRITE, ASGN, PLUS, MINUS, TIMES, SLASH, LT, LEQ, GT, GEQ, EQ, NEQ, COLON, SEMI,
+                 COMMA, DOT, LPAREN, RPAREN, LSQBRA, RSQBRA, LCUBRA, RCUBRA, UMINUS;
+
+
+
+
+
+non terminal	program,var_decl,type_decl,procedure_decl,fp_section,array_init,component2,record_inits2;
+non terminal Body   body;
+non terminal Expr		expression,write_expr;
+non terminal Stmt		statement, statement_r,statement6;	
+non terminal List 		declaration,statement_l,array_inits,actual_params,var_declo,
+						var_decl1,type_decl2,procedure_decl3,formal_params,component1,fp_section_4,lvalue5,write_params7,actual_params8,array_inits9,record_inits1,write_params,record_inits;
+non terminal Type		type;
+non terminal Lvalue		lvalue;
+non terminal TypeDecls	type_decls;
+non terminal ProcDecls	procedure_decls;
+non terminal VarDecls	var_decls;
+non terminal String	typename;
+
+precedence nonassoc	ELSE,NOT,ELSIF;
+precedence left		EQ, LT, GT, LEQ, GEQ, NEQ,PLUS, MINUS,TIMES, DIV,SLASH,MOD;
+precedence right	LPAREN,LSQBRA,OR,AND;
+
+
+start with program;
+
+program 			::= PROGRAM IS body:b SEMI          		
+					;	
+					
+body				::=	declaration BEGIN statement_l END   	
+					;
+					
+declaration			::= declaration VAR var_decls					
+					|	declaration TYPE type_decls	 			
+					|	declaration PROCEDURE procedure_decls		
+					|														
+					;
+					
+var_decls			::=	 var_declo								
+					;
+var_decl			::=   var_decl1   COLON typename  ASGN expression SEMI   	
+					|	  var_decl1   ASGN 	expression SEMI  							
+					;					
+var_declo			::=  var_declo var_decl 					
+					|	 var_decl							
+					;					
+var_decl1			::=   var_decl1 COMMA ID					
+					|	  ID							
+					;	
+					
+type_decls			::=	  type_decl2 						
+					;		
+type_decl			::=	  ID IS type SEMI      			
+					;					
+type_decl2			::=   type_decl2 AND type_decl					
+					|  	  type_decl								
+					;					
+															
+procedure_decls		::=   procedure_decl3	 			
+					;
+procedure_decl		::= ID formal_params  COLON typename  IS body SEMI		
+					|	ID formal_params  IS body SEMI								
+					;					
+procedure_decl3 	::=	  procedure_decl3 AND procedure_decl			
+					|	  procedure_decl					
+					;					
+									
+typename			::=	ID									
+					;
+type				::= ARRAY OF typename 				
+					|	RECORD component1  END					
+					;									
+
+component1			::= component1 component2					
+					|	component2						
+					;					
+component2			::= ID COLON typename  SEMI			
+					;					
+					
+formal_params		::= LPAREN  fp_section_4 	RPAREN	
+					| 	LPAREN RPAREN
+					;
+					
+fp_section			::=	 var_decl1  COLON typename	
+					;					
+fp_section_4 		::= fp_section_4 SEMI fp_section				
+					|	fp_section									
+					;							
+															
+statement			::=	 lvalue ASGN expression SEMI            		
+					|	 ID actual_params SEMI						
+					|	 READ LPAREN   lvalue5 RPAREN SEMI						
+					|	 WRITE write_params SEMI								
+					|	 IF expression THEN  statement6  ELSE  statement_r END SEMI	
+					|	 IF expression THEN  statement6  END statement_r  SEMI					
+					|	 WHILE expression DO statement_r  END SEMI				
+					|	 LOOP statement_r END SEMI									
+					|	 FOR ID ASGN expression TO expression BY expression DO  statement_r  END SEMI	
+					|	 FOR ID ASGN expression TO expression DO  statement_r  END SEMI						
+					|	 EXIT SEMI												
+					|	 RETURN expression SEMI								
+					|	 RETURN  SEMI											
+					;
+statement_l			::= statement_l statement 		
+					|	statement							
+					;
+statement6 					::=	statement6 ELSIF expression THEN statement_r 		
+					|	statement_r														
+					;					
+statement_r			::= statement_l						
+					|											
+					;
+					
+write_params 		::=	LPAREN write_params7  RPAREN				
+					|	LPAREN RPAREN	
+					;
+write_params7 		::= write_params7 COMMA write_expr:wexp			
+					|	write_expr:wexp						
+					;
+					
+write_expr 			::=	STRING_LITERAL				
+					| expression					
+					;															
+
+expression 			::= INTEGER_LITERAL 							
+					| 	REAL_LITERAL							
+					|	lvalue									
+					|	LPAREN expression RPAREN				
+					|	MINUS expression						
+					|	NOT expression							
+					|	expression PLUS expression			
+					|	expression MINUS expression			
+					|	expression TIMES expression			
+					|	expression DIV expression				
+					|	expression SLASH expression			
+					|	expression MOD expression				
+					|	expression AND expression				
+					|	expression OR expression				
+					|	expression GT expression				
+					|	expression LT expression				
+					|	expression EQ expression				
+					|	expression GEQ expression				
+					|	expression LEQ expression				
+					|	expression NEQ expression				
+					|	ID actual_params					
+					|	ID record_inits						
+					|	ID array_inits						
+					;
+				
+lvalue 				::=	ID											
+					| 	lvalue LSQBRA expression RSQBRA		
+					|	lvalue DOT ID							
+					;
+lvalue5 			::=	lvalue5 COMMA lvalue									
+					|	lvalue												
+					;
+					
+actual_params 		::=	LPAREN  actual_params8  RPAREN		
+					| 	LPAREN RPAREN									 
+					;		
+actual_params8 		::=	actual_params8 COMMA expression							
+					|	expression							
+					;					
+record_inits 		::=	LCUBRA record_inits1  RCUBRA					
+					;
+record_inits1 		::=	record_inits1  record_inits2							
+					|	record_inits2									
+					;
+record_inits2		::= SEMI ID ASGN expression					
+					|	ID ASGN expression						
+					;					
+array_inits 		::=	LCUBRA    array_inits9  RCUBRA						
+					|   LCUBRA  RCUBRA										
+					;								
+array_inits9 		::=	array_inits9 COMMA array_init					
+					|	array_init								
+					;
+array_init			::= expression OF  expression 		
+					|   expression								
+					;																
